@@ -1,5 +1,5 @@
-name: mobile_app
-description: "A new Flutter project."
+name: respiratrack
+description: RespiraTrack - Your Partner in TB-DOTS Treatment
 publish_to: "none"
 version: 0.1.0
 
@@ -9,13 +9,63 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # ── Navigation ──────────────────────────────────────────────
+  go_router: ^13.2.0 # Declarative routing
+
+  # ── Firebase ────────────────────────────────────────────────
+  firebase_core: ^2.27.1 # Required base for all Firebase
+  firebase_auth: ^4.18.0 # OTP / Phone Auth + Email-Password
+  cloud_firestore: ^4.15.9 # Notification logs, geofence alerts
+  firebase_messaging: ^14.7.20 # FCM push notifications
+
+  # ── Maps & Geolocation ──────────────────────────────────────
+  # OpenStreetMap via flutter_map — 100% free, no API key, no billing
+  flutter_map: ^6.1.0 # Map widget using OpenStreetMap tiles
+  latlong2: ^0.9.0 # LatLng type for flutter_map
+  flutter_map_cancellable_tile_provider: ^2.0.0 # Better tile loading
+  geolocator: ^11.0.0 # GPS coordinates
+  permission_handler: ^11.3.0 # Runtime permissions (location, notif)
+
+  # ── HTTP & API ───────────────────────────────────────────────
+  dio: ^5.4.3 # HTTP client for backend API calls
+
+  # ── State Management ─────────────────────────────────────────
+  flutter_riverpod: ^2.5.1 # State management
+  riverpod_annotation: ^2.3.5
+
+  # ── Local Storage ────────────────────────────────────────────
+  flutter_secure_storage: ^9.0.0 # Store JWT token securely
+  shared_preferences: ^2.2.3 # Light key-value (non-sensitive prefs)
+
+  # ── UI Components ────────────────────────────────────────────
+  flutter_svg: ^2.0.10+1 # SVG logo/icon rendering
+  cached_network_image: ^3.3.1 # Image caching
+  shimmer: ^3.0.0 # Loading skeletons
+  fl_chart: ^0.67.0 # Charts (compliance, heatmap stats)
+  lottie: ^3.1.0 # Lottie animations (loading, success)
+  pin_code_fields: ^8.0.1 # OTP input field
+  intl: ^0.19.0 # Date formatting
+
+  # ── Notifications (local) ────────────────────────────────────
+  flutter_local_notifications: ^17.1.2 # Show local push banners in-app
+
+  # ── Utilities ────────────────────────────────────────────────
+  device_info_plus: ^10.1.0 # Device ID for FCM token registration
+  connectivity_plus: ^6.0.3 # Network connectivity check
+  url_launcher: ^6.2.6 # Open external links
+  package_info_plus: ^8.0.0 # App version info
+
   flutter_screenutil: ^5.9.3
-  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  build_runner: ^2.4.9 # Code generation for Riverpod + Retrofit
+  riverpod_generator: ^2.3.12
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/logo404.png

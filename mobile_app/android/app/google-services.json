@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "44430853255",
+    "project_id": "respiratrack",
+    "storage_bucket": "respiratrack.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44430853255:android:8fe4a4a97c217a18cee422",
+        "android_client_info": {
+          "package_name": "com.respiratrack.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqtN2FGuFfuHqnJRBmAxSZm5NGWjv0PGM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
