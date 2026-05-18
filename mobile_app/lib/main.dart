@@ -9,13 +9,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'theme/app_theme.dart';
 import 'router.dart';
 
-// ── Background FCM handler (must be top-level) ────────────────
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  debugPrint('Background FCM message: ${message.messageId}');
-}
-
 // ── Local Notifications channel (Android) ────────────────────
 final FlutterLocalNotificationsPlugin localNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -46,7 +39,7 @@ Future<void> main() async {
 
   // Firebase init
   await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  await FirebaseMessaging.instance.setAutoInitEnabled(false);
 
   // Local notifications setup
   await localNotificationsPlugin

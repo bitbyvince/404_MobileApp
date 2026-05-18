@@ -24,7 +24,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _scaleAnim = Tween<double>(
@@ -32,19 +32,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
+
+    // Start JWT check immediately — runs in parallel with animation
     _navigate();
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 2200));
+    const storage = FlutterSecureStorage();
+
+    // Run JWT token check AND minimum display timer at the same time.
+    // The splash shows for at least 800ms, but never waits longer than
+    // it needs to — both finish together, whichever takes longer wins.
+    final results = await Future.wait([
+      storage.read(key: 'jwt_token'), // JWT check
+      Future.delayed(const Duration(milliseconds: 800)), // minimum display
+    ]);
+
     if (!mounted) return;
 
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'jwt_token');
-
-    if (mounted) {
-      context.go(token != null ? '/home' : '/login');
-    }
+    final token = results[0] as String?;
+    context.go(token != null ? '/home' : '/login');
   }
 
   @override
