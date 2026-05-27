@@ -1,240 +1,207 @@
-// lib/providers/auth_provider.dart
+import 'package:flutter/foundation.dart';
+import '../data/repositories/auth_repository.dart';
+import '../data/models/user_model.dart';
+import '../services/secure_storage_service.dart';
 
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-
-import '../services/auth_service.dart';
-import '../utils/jwt_helper.dart';
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-enum AuthStatus { loading, authenticated, unauthenticated }
+enum AuthStatus { initial, authenticated, unauthenticated, loading, error }
 
 class AuthProvider extends ChangeNotifier {
-  final AuthService _authService = AuthService();
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final AuthRepository _authRepository;
+  final SecureStorageService _secureStorage;
 
-  AuthStatus _status = AuthStatus.loading;
-  String? _userId = null;
-  String? _userRole = null;
-  String? _error = null;
+  AuthProvider({
+    required AuthRepository authRepository,
+    required SecureStorageService secureStorage,
+  }) : _authRepository = authRepository,
+       _secureStorage = secureStorage;
 
-  // ─── GETTERS ─────────────────────────────────────────────────────────────
+  // ── STATE ────────────────────────────────────────────────
+  AuthStatus _status = AuthStatus.initial;
+  UserModel? _currentUser;
+  String? _errorMessage;
+  bool _isLoading = false;
 
+  // ── GETTERS ──────────────────────────────────────────────
   AuthStatus get status => _status;
-  String? get userId => _userId;
-  String? get userRole => _userRole;
-  String? get error => _error;
-  bool get isLoading => _status == AuthStatus.loading;
+  UserModel? get currentUser => _currentUser;
+  String? get errorMessage => _errorMessage;
+  bool get isLoading => _isLoading;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
-  // ─── RESTORE SESSION ON APP START ────────────────────────────────────────
-
-  Future<void> checkExistingSession() async {
-    _status = AuthStatus.loading;
-    notifyListeners();
-
-    final hasToken = await JwtHelper.hasToken();
-
-    if (hasToken) {
-      final isValid = await _authService.isTokenValid();
-      if (isValid) {
-        _userId = await JwtHelper.getUserId();
-        _userRole = await JwtHelper.getUserRole();
-        _status = AuthStatus.authenticated;
-      } else {
-        // Token expired — clear and send to login
-        await JwtHelper.clearSession();
-        _status = AuthStatus.unauthenticated;
-      }
-    } else {
-      _status = AuthStatus.unauthenticated;
-    }
-
-    notifyListeners();
-  }
-
-  // ─── STEP 1: REGISTER + SEND OTP ─────────────────────────────────────────
-
-  Future<Map<String, dynamic>> register({
-    required String contactNumber,
-    required String password,
-    String? fullName,
-    String? email,
-  }) async {
-    _error = null;
-
+  // ── INIT: Check stored token on app launch ───────────────
+  Future<void> init() async {
+    _setLoading(true);
     try {
-      // Creates user in MongoDB — returns user_id and session_id
-      final result = await _authService.register(
-        contactNumber: contactNumber,
-        password: password,
-        fullName: fullName,
-        email: email,
-      );
-      return result;
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-      rethrow;
+      final token = await _secureStorage.getAccessToken();
+      if (token == null) {
+        _setStatus(AuthStatus.unauthenticated);
+        return;
+      }
+      // Token exists — fetch current user to validate session
+      final user = await _authRepository.getMe();
+      _currentUser = user;
+      _setStatus(AuthStatus.authenticated);
+    } catch (_) {
+      // Token invalid or expired — clear storage
+      await _secureStorage.clearAll();
+      _setStatus(AuthStatus.unauthenticated);
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // ─── STEP 2: VERIFY OTP + SAVE SESSION ───────────────────────────────────
+  // ── PATIENT LOGIN ────────────────────────────────────────
+  // identifier = tb_case_number | phone_number | email
+  Future<bool> patientLogin({
+    required String identifier,
+    required String pin,
+  }) async {
+    _setLoading(true);
+    _clearError();
+    try {
+      final result = await _authRepository.patientLogin(
+        identifier: identifier,
+        pin: pin,
+      );
+      await _secureStorage.saveTokens(
+        accessToken: result['accessToken'] as String? ?? '',
+        refreshToken: result['refreshToken'] as String? ?? '',
+      );
+      final user = await _authRepository.getMe();
+      _currentUser = user;
+      _setStatus(AuthStatus.authenticated);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      _setStatus(AuthStatus.unauthenticated);
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
 
-  Future<void> verifyOtp({
+  // ── OTP LOGIN ────────────────────────────────────────────
+  // After Firebase phone verification, exchange Firebase ID token
+  Future<bool> otpLogin({
+    required String phoneNumber,
     required String firebaseIdToken,
-    required String userId,
-    required String sessionId,
   }) async {
-    _status = AuthStatus.loading;
-    _error = null;
-    notifyListeners();
-
+    _setLoading(true);
+    _clearError();
     try {
-      final result = await _authService.verifyOtp(
+      final result = await _authRepository.verifyOtp(
+        phoneNumber: phoneNumber,
         firebaseIdToken: firebaseIdToken,
-        userId: userId,
-        sessionId: sessionId,
       );
-
-      await JwtHelper.saveSession(
-        token: result['token'],
-        userId: result['user']['id'],
-        role: result['user']['role'],
+      await _secureStorage.saveTokens(
+        accessToken: result['accessToken'] as String? ?? '',
+        refreshToken: result['refreshToken'] as String? ?? '',
       );
-
-      _userId = result['user']['id'];
-      _userRole = result['user']['role'];
-      _status = AuthStatus.authenticated;
-
-      // Register FCM token after successful login
-      await _registerFcmToken();
-
-      notifyListeners();
+      final user = await _authRepository.getMe();
+      _currentUser = user;
+      _setStatus(AuthStatus.authenticated);
+      return true;
     } catch (e) {
-      _error = e.toString();
-      _status = AuthStatus.unauthenticated;
-      notifyListeners();
-      rethrow;
+      _setError(e.toString());
+      _setStatus(AuthStatus.unauthenticated);
+      return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // ─── PUBLIC USER LOGIN ───────────────────────────────────────────────────
-
-  Future<void> login({
-    required String idOrEmail,
-    required String password,
-  }) async {
-    _status = AuthStatus.loading;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final result = await _authService.login(
-        contactNumber: idOrEmail,
-        password: password,
-      );
-
-      await JwtHelper.saveSession(
-        token: result['token'],
-        userId: result['user']['id'],
-        role: result['user']['role'],
-      );
-
-      _userId = result['user']['id'];
-      _userRole = result['user']['role'];
-      _status = AuthStatus.authenticated;
-
-      await _registerFcmToken();
-
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _status = AuthStatus.unauthenticated;
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  // ─── STAFF LOGIN (nurse / barangay_admin / super_admin) ──────────────────
-
-  Future<void> staffLogin({
-    required String email,
-    required String password,
-    required String role,
-  }) async {
-    _status = AuthStatus.loading;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final result = await _authService.staffLogin(
-        email: email,
-        password: password,
-        role: role,
-      );
-
-      await JwtHelper.saveSession(
-        token: result['token'],
-        userId: result['user']['id'],
-        role: result['user']['role'],
-      );
-
-      _userId = result['user']['id'];
-      _userRole = result['user']['role'];
-      _status = AuthStatus.authenticated;
-
-      await _registerFcmToken();
-
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      _status = AuthStatus.unauthenticated;
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  // ─── LOGOUT ──────────────────────────────────────────────────────────────
-
+  // ── LOGOUT ───────────────────────────────────────────────
   Future<void> logout() async {
-    await _authService.logout(); // clears JwtHelper session
-    await _firebaseAuth.signOut(); // clears Firebase Auth session
-
-    _userId = null;
-    _userRole = null;
-    _error = null;
-    _status = AuthStatus.unauthenticated;
-
-    notifyListeners();
-  }
-
-  // ─── REGISTER FCM TOKEN ──────────────────────────────────────────────────
-
-  Future<void> _registerFcmToken() async {
+    _setLoading(true);
     try {
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      if (fcmToken != null) {
-        await _authService.saveFcmToken(fcmToken);
-      }
-    } catch (e) {
-      // Non-fatal — FCM will retry on next login
-      debugPrint('[AuthProvider] FCM token registration failed: $e');
+      await _authRepository.logout();
+    } catch (_) {
+      // Logout silently — clear local state regardless
+    } finally {
+      await _secureStorage.clearAll();
+      _currentUser = null;
+      _setStatus(AuthStatus.unauthenticated);
+      _setLoading(false);
     }
   }
 
-  // ─── CLEAR ERROR ─────────────────────────────────────────────────────────
+  // ── CHANGE PIN ───────────────────────────────────────────
+  Future<bool> changePin({
+    required String currentPin,
+    required String newPin,
+    required String confirmNewPin,
+  }) async {
+    _setLoading(true);
+    _clearError();
+    try {
+      await _authRepository.changePin(
+        currentPin: currentPin,
+        newPin: newPin,
+        confirmNewPin: confirmNewPin,
+      );
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // ── REFRESH CURRENT USER ─────────────────────────────────
+  Future<void> refreshCurrentUser() async {
+    try {
+      final user = await _authRepository.getMe();
+      _currentUser = user;
+      notifyListeners();
+    } catch (_) {
+      // Silently fail — user data stays stale until next refresh
+    }
+  }
+
+  // ── TOKEN REFRESH ────────────────────────────────────────
+  Future<bool> refreshAccessToken() async {
+    try {
+      final refreshToken = await _secureStorage.getRefreshToken();
+      if (refreshToken == null) {
+        await logout();
+        return false;
+      }
+      final result = await _authRepository.refreshToken(refreshToken);
+      await _secureStorage.saveTokens(
+        accessToken: result['accessToken'] as String? ?? '',
+        refreshToken: result['refreshToken'] as String? ?? '',
+      );
+      return true;
+    } catch (_) {
+      await logout();
+      return false;
+    }
+  }
+
+  // ── PRIVATE HELPERS ──────────────────────────────────────
+  void _setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners();
+  }
+
+  void _setStatus(AuthStatus status) {
+    _status = status;
+    notifyListeners();
+  }
+
+  void _setError(String message) {
+    _errorMessage = message;
+    _status = AuthStatus.error;
+    notifyListeners();
+  }
+
+  void _clearError() {
+    _errorMessage = null;
+  }
 
   void clearError() {
-    _error = null;
+    _clearError();
     notifyListeners();
   }
 }
-
-// at the very bottom of auth_provider.dart
-
-final authProvider = ChangeNotifierProvider<AuthProvider>((ref) {
-  return AuthProvider();
-});

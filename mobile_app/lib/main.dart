@@ -1,85 +1,22 @@
 // lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-import 'theme/app_theme.dart';
-import 'router.dart';
-
-// ── Local Notifications channel (Android) ────────────────────
-final FlutterLocalNotificationsPlugin localNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
-  'tb_alerts',
-  'TB Risk Alerts',
-  description: 'High-risk TB zone proximity alerts',
-  importance: Importance.max,
-);
+import 'config/env.dart';
+import 'config/firebase_config.dart';
+import 'app.dart';
 
 Future<void> main() async {
+  // Required before any async work in main()
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // 1. Validate environment config — crashes early with a
+  //    clear message if a required value is missing
+  Env.validate();
 
-  // Status bar style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
+  // 2. Initialize Firebase — must happen before runApp()
+  await FirebaseConfig.initialize();
 
-  // Firebase init
-  await Firebase.initializeApp();
-  await FirebaseMessaging.instance.setAutoInitEnabled(false);
-
-  // Local notifications setup
-  await localNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
-      ?.createNotificationChannel(alertChannel);
-
-  await localNotificationsPlugin.initialize(
-    const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      iOS: DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-      ),
-    ),
-  );
-
-  // Request FCM permission (iOS)
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-
+  // 3. Run the app wrapped in ProviderScope for Riverpod
   runApp(const ProviderScope(child: RespiraTrackApp()));
-}
-
-class RespiraTrackApp extends ConsumerWidget {
-  const RespiraTrackApp({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
-    return MaterialApp.router(
-      title: 'RespiraTrack',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      routerConfig: router,
-    );
-  }
 }
