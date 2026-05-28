@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import 'api/api_client.dart';
 import 'secure_storage_service.dart';
+import 'dart:async' show unawaited;
 
 // ── Result type ───────────────────────────────────────────────
 // Wraps success/failure so repositories never throw — they return
@@ -224,19 +225,24 @@ class AuthService {
       if (token != null && token.isNotEmpty) {
         // Tell backend to invalidate the refresh token
         // Fire and forget — don't block logout on this
-        _dio
-            .post(ApiConfig.logout)
-            .catchError(
-              (e) => debugPrint('[AuthService] Logout backend call failed: $e'),
-            );
+        unawaited(
+          _dio.post(ApiConfig.logout).then((_) {}).catchError((dynamic e) {
+            debugPrint('[AuthService] Logout backend call failed: $e');
+            return null; // must return something assignable to Response
+          }),
+        );
 
         // Deregister FCM token from Firestore
         if (fcmToken != null && fcmToken.isNotEmpty) {
-          _dio
-              .delete(ApiConfig.removeFcmToken, data: {'fcm_token': fcmToken})
-              .catchError(
-                (e) => debugPrint('[AuthService] FCM deregister failed: $e'),
-              );
+          unawaited(
+            _dio
+                .delete(ApiConfig.removeFcmToken, data: {'fcm_token': fcmToken})
+                .then((_) {})
+                .catchError((dynamic e) {
+                  debugPrint('[AuthService] FCM deregister failed: $e');
+                  return null;
+                }),
+          );
         }
       }
     } catch (e) {

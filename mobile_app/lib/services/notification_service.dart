@@ -87,6 +87,8 @@ class NotificationService {
   // and the user is known to be logged in
   // ============================================================
   static Future<void> initialize({required String userId}) async {
+    await FirebaseConfig.requestPermissions();
+
     await Future.wait([
       _initLocalNotifications(),
       _registerDeviceToken(userId: userId),

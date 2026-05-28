@@ -39,10 +39,11 @@ class SputumProvider extends ChangeNotifier {
   SputumTestModel? get nextPendingTest {
     final today = DateTime.now();
     final upcoming = pendingTests
-        .where((t) => t.dueDate != null && t.dueDate!.isAfter(today))
+        // ignore: unnecessary_null_comparison
+        .where((t) => t.dueDate == null || t.dueDate.isAfter(today))
         .toList();
     if (upcoming.isEmpty) return null;
-    upcoming.sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    upcoming.sort((a, b) => a.dueDate.compareTo(b.dueDate));
     return upcoming.first;
   }
 
@@ -51,11 +52,10 @@ class SputumProvider extends ChangeNotifier {
     if (completedTests.isEmpty) return null;
     final sorted = [...completedTests]
       ..sort((a, b) {
+        // ignore: unnecessary_null_comparison
         final aDate = a.dateCollected ?? a.dueDate;
+        // ignore: unnecessary_null_comparison
         final bDate = b.dateCollected ?? b.dueDate;
-        if (aDate == null && bDate == null) return 0;
-        if (aDate == null) return 1;
-        if (bDate == null) return -1;
         return bDate.compareTo(aDate);
       });
     return sorted.first;
@@ -64,8 +64,9 @@ class SputumProvider extends ChangeNotifier {
   // ── Derived: Days until next test ────────────────────────
   int get daysUntilNextTest {
     final next = nextPendingTest;
+    // ignore: unnecessary_null_comparison
     if (next == null || next.dueDate == null) return 0;
-    final diff = next.dueDate!.difference(DateTime.now()).inDays;
+    final diff = next.dueDate.difference(DateTime.now()).inDays;
     return diff < 0 ? 0 : diff;
   }
 
@@ -170,9 +171,8 @@ class SputumProvider extends ChangeNotifier {
   }
 
   bool _isOverdue(SputumTestModel test) {
-    if (test.dueDate == null) return false;
-    if (test.result != null && test.result != 'Pending') return false;
-    return test.dueDate!.isBefore(DateTime.now());
+    if (test.result == null || test.result == 'Pending') return false;
+    return test.dueDate.isBefore(DateTime.now());
   }
 
   // ── RESET (on logout) ────────────────────────────────────

@@ -64,8 +64,8 @@ class AuthProvider extends ChangeNotifier {
         pin: pin,
       );
       await _secureStorage.saveTokens(
-        accessToken: result['accessToken'] as String? ?? '',
-        refreshToken: result['refreshToken'] as String? ?? '',
+        accessToken: result['accessToken'] ?? '',
+        refreshToken: result['refreshToken'] ?? '',
       );
       final user = await _authRepository.getMe();
       _currentUser = user;
@@ -94,8 +94,8 @@ class AuthProvider extends ChangeNotifier {
         firebaseIdToken: firebaseIdToken,
       );
       await _secureStorage.saveTokens(
-        accessToken: result['accessToken'] as String? ?? '',
-        refreshToken: result['refreshToken'] as String? ?? '',
+        accessToken: result['accessToken'] ?? '',
+        refreshToken: result['refreshToken'] ?? '',
       );
       final user = await _authRepository.getMe();
       _currentUser = user;
@@ -169,8 +169,8 @@ class AuthProvider extends ChangeNotifier {
       }
       final result = await _authRepository.refreshToken(refreshToken);
       await _secureStorage.saveTokens(
-        accessToken: result['accessToken'] as String? ?? '',
-        refreshToken: result['refreshToken'] as String? ?? '',
+        accessToken: result['accessToken'] ?? '',
+        refreshToken: result['refreshToken'] ?? '',
       );
       return true;
     } catch (_) {

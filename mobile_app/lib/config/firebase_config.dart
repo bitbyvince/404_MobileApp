@@ -60,10 +60,11 @@ class FirebaseConfig {
     // 3. Configure Firestore settings
     _configureFirestore();
 
-    // 4. Request notification permissions from the OS
-    await _requestNotificationPermissions();
-
     debugPrint('[FirebaseConfig] Initialized successfully.');
+  }
+
+  static Future<void> requestPermissions() async {
+    await _requestNotificationPermissions();
   }
 
   // ── Firestore settings ───────────────────────────────────

@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// lib/core/router/app_router.dart
 
+import 'package:flutter/material.dart'; // ← MISSING — fixes Scaffold/Center/Text errors
+import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/splash/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/pin_entry_screen.dart';
@@ -17,158 +19,107 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/health_records_screen.dart';
 import 'route_names.dart';
 
-class AppRouter {
-  static Route<dynamic> generateRoute(RouteSettings settings) {
-    switch (settings.name) {
-      // ── Splash ───────────────────────────────────────────
-      case '/':
-      case RouteNames.splash:
-        return _fade(const SplashScreen(), settings);
+final appRouterProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: RouteNames.splash,
+    debugLogDiagnostics: true,
+    routes: [
+      GoRoute(
+        path: RouteNames.splash,
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
 
-      // ── Auth ─────────────────────────────────────────────
-      case RouteNames.login:
-      case '/login':
-        return _slide(const LoginScreen(), settings);
+      GoRoute(
+        path: RouteNames.login,
+        name: 'login',
+        builder: (context, state) => const LoginScreen(),
+      ),
 
-      case RouteNames.pinEntry:
-      case '/login/pin':
-        final args = settings.arguments as Map<String, dynamic>? ?? {};
+      GoRoute(
+        path: RouteNames.pinEntry,
+        name: 'pin-entry',
+        builder: (context, state) => const PinEntryScreen(userId: '', displayName: '',),
+      ),
 
-        return _slide(
-          PinEntryScreen(
-            userId: args['user_id'] as String? ?? '',
-            displayName: args['display_name'] as String? ?? '',
-            loginMethod: args['login_method'] as String? ?? 'pin',
-          ),
-          settings,
-        );
+      GoRoute(
+        path: RouteNames.accountRecovery,
+        name: 'account-recovery',
+        builder: (context, state) => const AccountRecoveryScreen(),
+      ),
 
-      case RouteNames.accountRecovery:
-      case '/login/recovery':
-        return _slide(const AccountRecoveryScreen(), settings);
+      GoRoute(
+        path: RouteNames.dashboard,
+        name: 'dashboard',
+        // Pass query params if DashboardScreen needs displayName/userId
+        // They come from the patient profile loaded by the provider,
+        // so DashboardScreen should read them from the provider,
+        // NOT as constructor params — remove required params from DashboardScreen
+        builder: (context, state) => const DashboardScreen(),
+      ),
 
-      // ── Main ─────────────────────────────────────────────
-      case RouteNames.dashboard:
-      case '/dashboard':
-        return _fade(const DashboardScreen(), settings);
+      GoRoute(
+        path: RouteNames.medication,
+        name: 'medication',
+        builder: (context, state) => const MedicationScreen(),
+      ),
 
-      // ── Medication ───────────────────────────────────────
-      case RouteNames.medication:
-      case '/medication':
-        return _slide(const MedicationScreen(), settings);
+      GoRoute(
+        path: RouteNames.complianceCalendar,
+        name: 'compliance-calendar',
+        builder: (context, state) => const ComplianceCalendarScreen(),
+      ),
 
-      case RouteNames.complianceCalendar:
-      case '/medication/calendar':
-        return _slide(const ComplianceCalendarScreen(), settings);
+      GoRoute(
+        path: RouteNames.symptoms,
+        name: 'symptoms',
+        builder: (context, state) => const SymptomLogScreen(),
+      ),
 
-      // ── Symptoms ─────────────────────────────────────────
-      case RouteNames.symptomLog:
-      case '/symptoms/log':
-        return _slide(const SymptomLogScreen(), settings);
+      GoRoute(
+        path: RouteNames.appointments,
+        name: 'appointments',
+        builder: (context, state) => const AppointmentsScreen(),
+      ),
 
-      // ── Appointments ─────────────────────────────────────
-      case RouteNames.appointments:
-      case '/appointments':
-        return _slide(const AppointmentsScreen(), settings);
+      GoRoute(
+        path: RouteNames.bookAppointment,
+        name: 'book-appointment',
+        builder: (context, state) => const BookAppointmentScreen(),
+      ),
 
-      case RouteNames.bookAppointment:
-      case '/appointments/book':
-        return _modal(const BookAppointmentScreen(), settings);
+      GoRoute(
+        path: RouteNames.notifications,
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
 
-      // ── Notifications ────────────────────────────────────
-      case RouteNames.notifications:
-      case '/notifications':
-        return _slide(const NotificationsScreen(), settings);
+      GoRoute(
+        path: RouteNames.sputum,
+        name: 'sputum',
+        builder: (context, state) => const SputumScreen(),
+      ),
 
-      // ── Sputum ───────────────────────────────────────────
-      case RouteNames.sputum:
-      case '/sputum':
-        return _slide(const SputumScreen(), settings);
+      GoRoute(
+        path: RouteNames.profile,
+        name: 'profile',
+        builder: (context, state) => const ProfileScreen(),
+      ),
 
-      // ── Profile ──────────────────────────────────────────
-      case RouteNames.profile:
-      case '/profile':
-        return _slide(const ProfileScreen(), settings);
+      GoRoute(
+        path: RouteNames.healthRecords,
+        name: 'health-records',
+        builder: (context, state) => const HealthRecordsScreen(),
+      ),
+    ],
 
-      case RouteNames.healthRecords:
-      case '/profile/health-records':
-        return _slide(const HealthRecordsScreen(), settings);
-
-      // ── 404 ──────────────────────────────────────────────
-      default:
-        return _error(settings.name ?? 'unknown');
-    }
-  }
-
-  // ── Transition builders ──────────────────────────────────
-
-  /// Standard right-to-left slide transition
-  static PageRouteBuilder _slide(Widget page, RouteSettings settings) {
-    return PageRouteBuilder(
-      settings: settings,
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        const begin = Offset(1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeInOutCubic;
-
-        final tween = Tween<Offset>(
-          begin: begin,
-          end: end,
-        ).chain(CurveTween(curve: curve));
-
-        return SlideTransition(position: animation.drive(tween), child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 280),
-    );
-  }
-
-  /// Fade transition
-  static PageRouteBuilder _fade(Widget page, RouteSettings settings) {
-    return PageRouteBuilder(
-      settings: settings,
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 350),
-    );
-  }
-
-  /// Bottom slide-up modal transition
-  static PageRouteBuilder _modal(Widget page, RouteSettings settings) {
-    return PageRouteBuilder(
-      settings: settings,
-      opaque: false,
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        const begin = Offset(0.0, 1.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOutCubic;
-
-        final tween = Tween<Offset>(
-          begin: begin,
-          end: end,
-        ).chain(CurveTween(curve: curve));
-
-        return SlideTransition(position: animation.drive(tween), child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 320),
-    );
-  }
-
-  /// Unknown route fallback
-  static MaterialPageRoute _error(String routeName) {
-    return MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Page Not Found')),
-        body: Center(
-          child: Text(
-            'No route defined for "$routeName"',
-            style: const TextStyle(fontSize: 16),
-          ),
+    errorBuilder: (context, state) => Scaffold(
+      body: Center(
+        child: Text(
+          'Page not found: ${state.uri.path}',
+          style: const TextStyle(fontSize: 16),
         ),
       ),
-    );
-  }
-}
+    ),
+  );
+});
