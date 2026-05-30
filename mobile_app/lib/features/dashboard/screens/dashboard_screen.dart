@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../medication/screens/compliance_calendar_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../../../core/router/route_names.dart';
-import '../../../providers/patient_provider.dart';
 import '../../../data/models/patient_model.dart';
+import '../../../data/repositories/patient_repository.dart';
+import '../../../data/repositories/medication_repository.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/days_remaining_card.dart';
 import '../widgets/sputum_countdown_card.dart';
@@ -84,24 +84,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _HomePage extends ConsumerStatefulWidget {
+// ── Home tab ──────────────────────────────────────────────────
+class _HomePage extends StatefulWidget {
   const _HomePage();
 
   @override
-  ConsumerState<_HomePage> createState() => _HomePageState();
+  State<_HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends ConsumerState<_HomePage> {
+class _HomePageState extends State<_HomePage> {
   static const _blue = Color(0xFF1A73E8);
 
+  bool _loading = true;
   bool _markingTaken = false;
+  String? _error;
+  PatientModel? _patient;
 
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  // ── Load patient profile from repository ─────────────────
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final patient = await PatientRepository.instance.getMyProfile();
+      if (mounted) setState(() => _patient = patient);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ── Mark all doses taken then refresh ────────────────────
   Future<void> _markTaken() async {
     setState(() => _markingTaken = true);
     try {
-      // Wire to MedicationRepository.instance.markAllTaken in production
-      await Future.delayed(const Duration(milliseconds: 800));
-      ref.invalidate(patientProvider);
+      await MedicationRepository.instance.markAllTaken(
+        takenAt: DateTime.now(),
+      );
+      // Refresh patient profile so compliance percentage updates
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
     } finally {
       if (mounted) setState(() => _markingTaken = false);
     }
@@ -109,15 +144,31 @@ class _HomePageState extends ConsumerState<_HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final patientAsync = ref.watch(patientProvider);
-    return patientAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
-      data: (patient) => _buildHome(patient),
-    );
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Error: $_error'),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _load,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildHome();
   }
 
-  Widget _buildHome(PatientModel? patient) {
+  Widget _buildHome() {
+    final patient = _patient;
     final name = patient?.firstName ?? 'Patient';
     final compliance = patient?.compliance.compliancePercentage ?? 0.0;
     final daysLeft = patient != null
@@ -132,18 +183,22 @@ class _HomePageState extends ConsumerState<_HomePage> {
         _isToday(patient!.compliance.lastDoseTaken!);
 
     // Sputum countdown
-    final nextSputum = patient?.sputumTestSchedule
-        .where((s) => s.status == 'Pending' && s.dueDate.isAfter(DateTime.now()))
-        .toList()
-      ?..sort((a, b) => a.dueDate.compareTo(b.dueDate));
-    final hasSputum = nextSputum != null && nextSputum.isNotEmpty;
+    final rawSputum = patient?.sputumTestSchedule ?? [];
+    final pendingSputum =
+        rawSputum
+            .where(
+              (s) => s.status == 'Pending' && s.dueDate.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    final hasSputum = pendingSputum.isNotEmpty;
     final daysUntilSputum = hasSputum
-        ? nextSputum.first.dueDate.difference(DateTime.now()).inDays
+        ? pendingSputum.first.dueDate.difference(DateTime.now()).inDays
         : 0;
 
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(patientProvider),
+        onRefresh: _load,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
@@ -199,7 +254,6 @@ class _HomePageState extends ConsumerState<_HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     // ── STREAK ────────────────────────────
                     StreakCard(
                       streakDays: streakDays,
@@ -218,8 +272,12 @@ class _HomePageState extends ConsumerState<_HomePage> {
                     // ── SPUTUM COUNTDOWN ──────────────────
                     SputumCountdownCard(
                       daysUntilTest: hasSputum ? daysUntilSputum : 0,
-                      testMonth: hasSputum ? nextSputum.first.month : 0,
-                      dueDate: hasSputum ? nextSputum.first.dueDate : null,
+                      testMonth: hasSputum
+                          ? pendingSputum.first.month
+                          : 0,
+                      dueDate: hasSputum
+                          ? pendingSputum.first.dueDate
+                          : null,
                       noTestScheduled: !hasSputum,
                     ),
                     const SizedBox(height: 12),
@@ -232,8 +290,7 @@ class _HomePageState extends ConsumerState<_HomePage> {
                       isLoading: _markingTaken,
                       date: DateTime.now(),
                       stockDoses: 45,
-                      // ── Navigate to full medication screen on tap ──────────
-                      onMarkTaken: () => context.push(RouteNames.medication),
+                      onMarkTaken: takenToday ? () {} : _markTaken,
                     ),
                     const SizedBox(height: 20),
 
@@ -249,33 +306,32 @@ class _HomePageState extends ConsumerState<_HomePage> {
                     ),
                     const SizedBox(height: 10),
                     QuickAccessGrid(
-                      items: [
-                        const QuickAccessItem(
+                      items: const [
+                        QuickAccessItem(
                           label: 'Medication',
                           icon: Icons.medication_rounded,
                           color: Color(0xFF1A73E8),
-                          route: RouteNames.medication, // '/medication'
+                          route: RouteNames.medication,
                         ),
-                        const QuickAccessItem(
+                        QuickAccessItem(
                           label: 'Symptoms',
                           icon: Icons.sick_outlined,
                           color: Color(0xFFE53935),
                           route: RouteNames.symptoms,
                         ),
-                        const QuickAccessItem(
+                        QuickAccessItem(
                           label: 'Sputum',
                           icon: Icons.biotech_outlined,
                           color: Color(0xFF9C27B0),
                           route: RouteNames.sputum,
                         ),
-                        const QuickAccessItem(
+                        QuickAccessItem(
                           label: 'Appointments',
                           icon: Icons.calendar_today_outlined,
                           color: Color(0xFF34A853),
                           route: RouteNames.appointments,
                         ),
                       ],
-                      // ── KEY FIX: use context.push not Navigator.pushNamed ──
                       onTap: (route) => context.push(route),
                     ),
                     const SizedBox(height: 24),
