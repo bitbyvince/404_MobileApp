@@ -33,6 +33,12 @@ class AuthRepository {
     return {
       'accessToken': data['accessToken'] as String? ?? '',
       'refreshToken': data['refreshToken'] as String? ?? '',
+      'userId': data['userId'] as String? ?? '',
+      'patientId': data['patientId'] as String? ?? '',
+      'tbCaseNumber':
+          data['tbCaseNumber'] as String? ??
+          data['tb_case_number'] as String? ??
+          '',
     };
   }
 
@@ -60,21 +66,20 @@ class AuthRepository {
     };
   }
 
+  // auth_repository.dart
   Future<UserModel> getMe() async {
-    // /auth/verify only checks token validity — it doesn't return user data.
-    // /patients/me is the correct authenticated endpoint for user profile.
-    final response = await _client.get(ApiConfig.myProfile);
+    // Use a dedicated /auth/me or /users/me endpoint that returns user fields
+    // NOT /patients/me which returns patient clinical data
+    final response = await _client.get('/auth/me');
+    // or '/users/me' — whichever your backend exposes for user identity
     if (response.statusCode != 200) {
       throw _createApiException(response);
     }
-
     final json = response.data as Map<String, dynamic>;
-    final userJson =
-        json['user'] as Map<String, dynamic>? ??
-        json['data'] as Map<String, dynamic>? ??
-        json;
+    final userJson = json['data'] as Map<String, dynamic>? ?? json;
     return UserModel.fromJson(userJson);
   }
+
   Future<void> logout() async {
     final response = await _client.post(ApiConfig.logout);
     if (response.statusCode != 200 && response.statusCode != 204) {

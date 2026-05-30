@@ -57,11 +57,13 @@ class MedicationRepository {
     final response = await _client.post(
       ApiConfig.submitMedicationLog(patientId),
       data: {
-        'action': 'mark_drug_taken',
+        'log_date': _formatDate(DateTime.now()),
+        'logged_by': 'patient',
         'drug_name': drugName,
         'strength': strength,
+        'status': 'Taken',
         'taken_at': takenAt.toIso8601String(),
-      },
+      }
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -77,7 +79,13 @@ class MedicationRepository {
     final patientId = await _getPatientId();
     final response = await _client.post(
       ApiConfig.submitMedicationLog(patientId),
-      data: {'action': 'mark_all_taken', 'taken_at': takenAt.toIso8601String()},
+      data: {
+        'log_date': _formatDate(DateTime.now()),
+        'logged_by': 'patient',
+        'medicines': [], // empty = backend fills from patient's drug_regimen
+        'overall_status': 'Taken',
+        'taken_at': takenAt.toIso8601String(),
+      }
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {
