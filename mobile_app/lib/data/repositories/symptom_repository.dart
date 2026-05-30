@@ -1,8 +1,5 @@
-import 'package:dio/dio.dart';
-import 'package:respiratrack/config/api_config.dart';
 import 'package:respiratrack/data/models/symptom_log_model.dart';
 import 'package:respiratrack/services/api/api_client.dart';
-import 'package:respiratrack/services/secure_storage_service.dart';
 
 class SymptomRepository {
   SymptomRepository._();
@@ -10,76 +7,54 @@ class SymptomRepository {
 
   static final _client = ApiClient.instance;
 
+  // ── TODAY'S LOG ───────────────────────────────────────────
   Future<SymptomLogModel?> getTodayLog() async {
-    final patientId = await _getPatientId();
-    final response = await _client.get(
-      ApiConfig.symptomLogs(patientId),
-      queryParameters: {'today': 'true'},
-    );
-
-    if (response.statusCode == 404) {
-      return null;
-    }
-    if (response.statusCode != 200) {
-      throw _createApiException(response);
-    }
-
-    final body = response.data as Map<String, dynamic>;
-    final payload = (body['data'] as Map<String, dynamic>?) ?? body;
-    return SymptomLogModel.fromJson(payload);
+    final response = await _client.get('/symptom-logs/today');
+    if (response.statusCode == 404) return null;
+    _assertSuccess(response);
+    final data = response.data['data'];
+    if (data == null) return null;
+    return SymptomLogModel.fromJson(data as Map<String, dynamic>);
   }
 
+  // ── HISTORY ───────────────────────────────────────────────
   Future<SymptomHistoryResult> getHistory({
     int page = 1,
     int limit = 20,
   }) async {
-    final patientId = await _getPatientId();
     final response = await _client.get(
-      ApiConfig.symptomLogs(patientId),
+      '/symptom-logs/history', // ← was /symptom-logs/my
       queryParameters: {'page': page, 'limit': limit},
     );
-
-    if (response.statusCode != 200) {
-      throw _createApiException(response);
-    }
-
+    _assertSuccess(response);
     return SymptomHistoryResult.fromJson(response.data as Map<String, dynamic>);
   }
 
+  // ── SUBMIT ────────────────────────────────────────────────
   Future<SymptomLogModel> submitLog({
     required List<SymptomEntry> symptoms,
-    required String freeTextNotes,
+    String freeTextNotes = '',
   }) async {
-    final patientId = await _getPatientId();
     final response = await _client.post(
-      ApiConfig.submitSymptomLog(patientId),
+      '/symptom-logs',
       data: {
         'symptoms': symptoms.map((s) => s.toJson()).toList(),
         'free_text_notes': freeTextNotes,
       },
     );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw _createApiException(response);
-    }
-
-    final body = response.data as Map<String, dynamic>;
-    final payload = (body['data'] as Map<String, dynamic>?) ?? body;
-    return SymptomLogModel.fromJson(payload);
+    _assertSuccess(response);
+    return SymptomLogModel.fromJson(
+      response.data['data'] as Map<String, dynamic>,
+    );
   }
 
-  Future<String> _getPatientId() async {
-    final patientId = await SecureStorageService.getPatientId();
-    if (patientId == null || patientId.isEmpty) {
-      throw Exception('Patient ID is not available in secure storage.');
+  void _assertSuccess(response) {
+    final statusCode = response.statusCode ?? 0;
+    if (statusCode < 200 || statusCode >= 300) {
+      final message = response.data is Map
+          ? (response.data['message'] as String? ?? 'Request failed.')
+          : 'Request failed with status $statusCode';
+      throw Exception(message);
     }
-    return patientId;
-  }
-
-  Exception _createApiException(Response response) {
-    final message =
-        (response.data as Map<String, dynamic>?)?['message'] as String? ??
-        'Request failed with status ${response.statusCode}.';
-    return Exception(message);
   }
 }

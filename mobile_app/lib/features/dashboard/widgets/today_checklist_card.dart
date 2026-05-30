@@ -76,10 +76,6 @@ class TodayChecklistCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // ── MEDICINE STOCK ROW ───────────────────────────
-          _StockRow(stockDoses: stockDoses),
-          const SizedBox(height: 12),
-
           // ── MEDICINE ITEM ────────────────────────────────
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -221,82 +217,4 @@ class TodayChecklistCard extends StatelessWidget {
   }
 }
 
-class _StockRow extends StatelessWidget {
-  final int stockDoses;
 
-  const _StockRow({required this.stockDoses});
-
-  Color get _stockColor {
-    if (stockDoses <= 10) return const Color(0xFFE53935);
-    if (stockDoses <= 20) return const Color(0xFFFFA000);
-    return const Color(0xFF34A853);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.medication_outlined,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
-              const SizedBox(width: 6),
-              const Text(
-                'Medicine Inventory',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Anti-TB Medication Stock',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Stock Level',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              ),
-              Text(
-                '$stockDoses Doses Available',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _stockColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (stockDoses / 60).clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation<Color>(_stockColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -232,7 +232,8 @@ class _HomePageState extends ConsumerState<_HomePage> {
                       isLoading: _markingTaken,
                       date: DateTime.now(),
                       stockDoses: 45,
-                      onMarkTaken: _markTaken,
+                      // ── Navigate to full medication screen on tap ──────────
+                      onMarkTaken: () => context.push(RouteNames.medication),
                     ),
                     const SizedBox(height: 20),
 
@@ -253,13 +254,13 @@ class _HomePageState extends ConsumerState<_HomePage> {
                           label: 'Medication',
                           icon: Icons.medication_rounded,
                           color: Color(0xFF1A73E8),
-                          route: RouteNames.medication,
+                          route: RouteNames.medication, // '/medication'
                         ),
                         const QuickAccessItem(
                           label: 'Symptoms',
                           icon: Icons.sick_outlined,
                           color: Color(0xFFE53935),
-                          route: RouteNames.symptomLog,
+                          route: RouteNames.symptoms,
                         ),
                         const QuickAccessItem(
                           label: 'Sputum',
@@ -274,6 +275,7 @@ class _HomePageState extends ConsumerState<_HomePage> {
                           route: RouteNames.appointments,
                         ),
                       ],
+                      // ── KEY FIX: use context.push not Navigator.pushNamed ──
                       onTap: (route) => context.push(route),
                     ),
                     const SizedBox(height: 24),

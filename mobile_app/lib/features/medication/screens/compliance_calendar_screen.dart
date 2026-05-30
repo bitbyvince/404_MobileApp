@@ -324,7 +324,7 @@ class _ComplianceCalendarScreenState extends State<ComplianceCalendarScreen> {
                                         try {
                                           await MedicationRepository.instance
                                               .markAllTaken(
-                                                takenAt: DateTime.now(),
+                                                takenAt: DateTime.now(), fullRegimen: [],
                                               );
                                           _loadHistory();
                                         } catch (_) {}
