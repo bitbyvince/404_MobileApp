@@ -136,7 +136,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               'Stay updated with your treatment reminders',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
               ),
             ),
           ],

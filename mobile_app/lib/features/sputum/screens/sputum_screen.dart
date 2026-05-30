@@ -135,7 +135,7 @@ class _SputumScreenState extends State<SputumScreen> {
                             'WHO standard checkpoints: Month 2, 5, and 6',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                           if (_nextTest != null) ...[
@@ -146,7 +146,7 @@ class _SputumScreenState extends State<SputumScreen> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(

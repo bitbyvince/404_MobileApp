@@ -33,16 +33,15 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       final token = await _secureStorage.getAccessToken();
-      if (token == null) {
+      if (token == null || token.isEmpty) {
         _setStatus(AuthStatus.unauthenticated);
         return;
       }
-      // Token exists — fetch current user to validate session
+      // Token exists — validate with backend and load user
       final user = await _authRepository.getMe();
       _currentUser = user;
       _setStatus(AuthStatus.authenticated);
     } catch (_) {
-      // Token invalid or expired — clear storage
       await _secureStorage.clearAll();
       _setStatus(AuthStatus.unauthenticated);
     } finally {
@@ -51,7 +50,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ── PATIENT LOGIN ────────────────────────────────────────
-  // identifier = tb_case_number | phone_number | email
+  // identifier = patient_id (PT-XXXX) | phone_number | email
   Future<bool> patientLogin({
     required String identifier,
     required String pin,
@@ -59,14 +58,18 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     _clearError();
     try {
+      // Repository auto-detects identifier type internally —
+      // no need to pass identifierType from the provider
       final result = await _authRepository.patientLogin(
         identifier: identifier,
         pin: pin,
       );
+
       await _secureStorage.saveTokens(
         accessToken: result['accessToken'] ?? '',
         refreshToken: result['refreshToken'] ?? '',
       );
+
       final user = await _authRepository.getMe();
       _currentUser = user;
       _setStatus(AuthStatus.authenticated);
@@ -81,7 +84,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ── OTP LOGIN ────────────────────────────────────────────
-  // After Firebase phone verification, exchange Firebase ID token
   Future<bool> otpLogin({
     required String phoneNumber,
     required String firebaseIdToken,
@@ -93,10 +95,12 @@ class AuthProvider extends ChangeNotifier {
         phoneNumber: phoneNumber,
         firebaseIdToken: firebaseIdToken,
       );
+
       await _secureStorage.saveTokens(
         accessToken: result['accessToken'] ?? '',
         refreshToken: result['refreshToken'] ?? '',
       );
+
       final user = await _authRepository.getMe();
       _currentUser = user;
       _setStatus(AuthStatus.authenticated);
@@ -116,7 +120,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authRepository.logout();
     } catch (_) {
-      // Logout silently — clear local state regardless
+      // Always clear locally regardless of network result
     } finally {
       await _secureStorage.clearAll();
       _currentUser = null;
@@ -155,7 +159,7 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = user;
       notifyListeners();
     } catch (_) {
-      // Silently fail — user data stays stale until next refresh
+      // Silently fail — stale data is acceptable here
     }
   }
 

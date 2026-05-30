@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env.dart';
 
@@ -10,7 +10,7 @@ class SecureStorageService {
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
 
-  // ── JWT ──────────────────────────────────────────────────
+  // ── JWT ───────────────────────────────────────────────────
   static Future<void> saveJwt(String token) =>
       _storage.write(key: Env.jwtStorageKey, value: token);
 
@@ -28,16 +28,14 @@ class SecureStorageService {
   static Future<void> deleteRefreshToken() =>
       _storage.delete(key: Env.refreshTokenKey);
 
-  // ── User identity ─────────────────────────────────────────
+  // ── User Identity ─────────────────────────────────────────
   static Future<void> saveUserIdentity({
     required String userId,
     required String patientId,
-    required String tbCaseNumber,
   }) async {
     await Future.wait([
       _storage.write(key: Env.userIdStorageKey, value: userId),
       _storage.write(key: Env.patientIdStorageKey, value: patientId),
-      _storage.write(key: Env.tbCaseNumberKey, value: tbCaseNumber),
     ]);
   }
 
@@ -47,10 +45,7 @@ class SecureStorageService {
   static Future<String?> getPatientId() =>
       _storage.read(key: Env.patientIdStorageKey);
 
-  static Future<String?> getTbCaseNumber() =>
-      _storage.read(key: Env.tbCaseNumberKey);
-
-  // ── Saved login identifier ────────────────────────────────
+  // ── Saved login identifier (pre-fill on next launch) ──────
   static Future<void> saveIdentifier(String identifier) =>
       _storage.write(key: Env.savedIdentifierKey, value: identifier);
 
@@ -65,7 +60,7 @@ class SecureStorageService {
 
   static Future<void> deletePin() => _storage.delete(key: Env.pinStorageKey);
 
-  // ── Clear all (static) ────────────────────────────────────
+  // ── Wipe all (logout / session expired) ───────────────────
   static Future<void> wipeAll() async {
     await Future.wait([
       deleteJwt(),
@@ -73,7 +68,7 @@ class SecureStorageService {
       deletePin(),
       _storage.delete(key: Env.userIdStorageKey),
       _storage.delete(key: Env.patientIdStorageKey),
-      _storage.delete(key: Env.tbCaseNumberKey),
+      _storage.delete(key: Env.savedIdentifierKey),
     ]);
     debugPrint('[SecureStorage] Cleared all credentials.');
   }

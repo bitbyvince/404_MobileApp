@@ -27,10 +27,12 @@ class AuthRepository {
       throw _createApiException(response);
     }
 
-    final data = response.data as Map<String, dynamic>;
+    // Backend returns: { success, message, data: { accessToken, refreshToken, role } }
+    final body = response.data as Map<String, dynamic>;
+    final data = body['data'] as Map<String, dynamic>? ?? {};
     return {
-      'accessToken': data['token'] as String? ?? '',
-      'refreshToken': data['refresh_token'] as String? ?? '',
+      'accessToken': data['accessToken'] as String? ?? '',
+      'refreshToken': data['refreshToken'] as String? ?? '',
     };
   }
 
@@ -50,15 +52,18 @@ class AuthRepository {
       throw _createApiException(response);
     }
 
-    final data = response.data as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
+    final data = body['data'] as Map<String, dynamic>? ?? {};
     return {
-      'accessToken': data['access_token'] as String? ?? '',
-      'refreshToken': data['refresh_token'] as String? ?? '',
+      'accessToken': data['accessToken'] as String? ?? '',
+      'refreshToken': data['refreshToken'] as String? ?? '',
     };
   }
 
   Future<UserModel> getMe() async {
-    final response = await _client.get(ApiConfig.verifyToken);
+    // /auth/verify only checks token validity — it doesn't return user data.
+    // /patients/me is the correct authenticated endpoint for user profile.
+    final response = await _client.get(ApiConfig.myProfile);
     if (response.statusCode != 200) {
       throw _createApiException(response);
     }
@@ -70,7 +75,6 @@ class AuthRepository {
         json;
     return UserModel.fromJson(userJson);
   }
-
   Future<void> logout() async {
     final response = await _client.post(ApiConfig.logout);
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -107,20 +111,22 @@ class AuthRepository {
       throw _createApiException(response);
     }
 
-    final data = response.data as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
+    final data = body['data'] as Map<String, dynamic>? ?? {};
     return {
-      'accessToken': data['access_token'] as String? ?? '',
-      'refreshToken': data['refresh_token'] as String? ?? '',
+      'accessToken': data['accessToken'] as String? ?? '',
+      'refreshToken': data['refreshToken'] as String? ?? '',
     };
   }
 
+  // Auto-detects identifier type from the input value
   IdentifierType _detectIdentifierType(String identifier) {
     final trimmed = identifier.trim();
     if (trimmed.contains('@')) return IdentifierType.email;
     if (trimmed.startsWith('+63') || trimmed.startsWith('09')) {
       return IdentifierType.phoneNumber;
     }
-    return IdentifierType.tbCaseNumber;
+    return IdentifierType.patientId; // PT-XXXX
   }
 
   Exception _createApiException(Response response) {
@@ -132,7 +138,7 @@ class AuthRepository {
 }
 
 enum IdentifierType {
-  tbCaseNumber('tb_case_number'),
+  patientId('patient_id'),
   phoneNumber('phone_number'),
   email('email');
 

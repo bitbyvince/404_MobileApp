@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/repositories/patient_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../services/secure_storage_service.dart';
@@ -69,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {}
     await SecureStorageService.wipeAll();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, RouteNames.login);
+      context.go(RouteNames.login);
     }
   }
 
@@ -263,10 +264,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => Navigator.pushNamed(
-                          context,
-                          RouteNames.healthRecords,
-                        ),
+                        onPressed: () => context.push(RouteNames.healthRecords),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _navy,
                           side: const BorderSide(color: Color(0xFF1A3A5C)),

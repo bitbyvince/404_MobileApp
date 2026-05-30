@@ -53,7 +53,7 @@ class ApiConfig {
   // POST   /auth/login
   //        body: { identifier, identifier_type, pin }
   //        identifier_type: "tb_case_number" | "phone_number" | "email"
-  static const String login = '/auth/login';
+  static const String login = '/auth/patient-login';
 
   // POST   /auth/logout
   static const String logout = '/auth/logout';

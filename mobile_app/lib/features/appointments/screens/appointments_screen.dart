@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/repositories/appointment_repository.dart';
 import '../../../data/models/appointment_model.dart';
 import '../../../core/router/route_names.dart';
@@ -125,7 +126,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
           IconButton(
             icon: const Icon(Icons.add_rounded),
             onPressed: () async {
-              await Navigator.pushNamed(context, RouteNames.bookAppointment);
+              await context.push(RouteNames.bookAppointment);
               _loadAll();
             },
           ),
@@ -149,7 +150,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen>
         backgroundColor: _blue,
         foregroundColor: Colors.white,
         onPressed: () async {
-          await Navigator.pushNamed(context, RouteNames.bookAppointment);
+          await context.push(RouteNames.bookAppointment);
           _loadAll();
         },
         icon: const Icon(Icons.add_rounded),

@@ -123,7 +123,7 @@ class _ComplianceCalendarScreenState extends State<ComplianceCalendarScreen> {
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 10,
                           offset: const Offset(0, 3),
                         ),
@@ -167,7 +167,7 @@ class _ComplianceCalendarScreenState extends State<ComplianceCalendarScreen> {
                       ),
                       calendarStyle: CalendarStyle(
                         todayDecoration: BoxDecoration(
-                          color: _blue.withOpacity(0.15),
+                          color: _blue.withValues(alpha:0.15),
                           shape: BoxShape.circle,
                         ),
                         todayTextStyle: const TextStyle(
@@ -235,7 +235,7 @@ class _ComplianceCalendarScreenState extends State<ComplianceCalendarScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
+                            color: Colors.black.withValues(alpha: 0.06),
                             blurRadius: 10,
                             offset: const Offset(0, 3),
                           ),

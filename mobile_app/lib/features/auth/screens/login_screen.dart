@@ -31,8 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
   String get _identifierHint {
     final text = _identifierController.text.trim();
     if (text.isEmpty) return '';
-    if (RegExp(r'^PHNT-', caseSensitive: false).hasMatch(text)) {
-      return 'TB Case Number';
+    if (RegExp(r'^PT-', caseSensitive: false).hasMatch(text)) {
+      return 'Patient ID';
     }
     if (RegExp(r'^(\+63|0)9').hasMatch(text)) {
       return 'Phone Number';
@@ -72,16 +72,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await SecureStorageService.saveUserIdentity(
         userId: user.userId,
         patientId: user.patientId ?? '',
-        tbCaseNumber: user.tbCaseNumber ?? '',
+        // ── removed tbCaseNumber — field no longer exists
       );
 
-      // Save identifier for pre-fill on next launch
       await SecureStorageService.saveIdentifier(
         _identifierController.text.trim(),
       );
 
       if (!mounted) return;
-      context.go(RouteNames.dashboard); // GoRouter — not Navigator
+      context.go(RouteNames.dashboard);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -97,14 +96,14 @@ class _LoginScreenState extends State<LoginScreen> {
   // ── Identifier validator ───────────────────────────────
   String? _validateIdentifier(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Please enter your TB case number, phone number, or email.';
+      return 'Please enter your Patient ID, phone number, or email.';
     }
 
     final v = value.trim();
 
-    // TB case number: PHNT-1304-071-S26-0001
+    // Patient ID: PT-0001
     if (RegExp(
-      r'^PHNT-\d{4}-\d{3}-(S|DR)\d{2}-\d{4}$',
+      r'^PT-\d{4}$',
       caseSensitive: false,
     ).hasMatch(v))
       return null;
@@ -118,8 +117,8 @@ class _LoginScreenState extends State<LoginScreen> {
     ).hasMatch(v))
       return null;
 
-    return 'Enter a valid TB case number '
-        '(PHNT-1304-071-S26-0001), '
+    return 'Enter a valid Patient ID '
+        '(PT-0001), '
         'phone (09XXXXXXXXX), or email.';
   }
 
@@ -217,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Use your TB case number, phone, or email',
+                    'Use your Patient ID, phone, or email',
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                   ),
                 ),
@@ -236,14 +235,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           textInputAction: TextInputAction.next,
                           autocorrect: false,
                           decoration: InputDecoration(
-                            labelText: 'TB Case No. / Phone / Email',
-                            hintText: 'PHNT-1304-071-S26-0001',
+                            labelText: 'Patient ID / Phone / Email',
+                            hintText: 'PT-0001',
                             prefixIcon: Icon(
                               Icons.badge_outlined,
                               size: 20,
                               color: Colors.grey.shade500,
                             ),
-                            // Shows detected type tag (e.g. "TB Case Number")
+                            // Shows detected type tag (e.g. "Patient ID")
                             suffixIcon: _identifierHint.isNotEmpty
                                 ? Padding(
                                     padding: const EdgeInsets.only(right: 12),
@@ -307,7 +306,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Accepted formats hint
                         const SizedBox(height: 6),
                         Text(
-                          'Accepted: PHNT-1304-071-S26-0001 '
+                          'Accepted: PT-0001 '
                           '• 09XXXXXXXXX • email@example.com',
                           style: TextStyle(
                             fontSize: 11,

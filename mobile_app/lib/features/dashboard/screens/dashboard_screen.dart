@@ -7,6 +7,11 @@ import '../../profile/screens/profile_screen.dart';
 import '../../../core/router/route_names.dart';
 import '../../../providers/patient_provider.dart';
 import '../../../data/models/patient_model.dart';
+import '../widgets/streak_card.dart';
+import '../widgets/days_remaining_card.dart';
+import '../widgets/sputum_countdown_card.dart';
+import '../widgets/today_checklist_card.dart';
+import '../widgets/quick_access_grid.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -87,11 +92,20 @@ class _HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<_HomePage> {
-  static const _navy = Color(0xFF1A3A5C);
   static const _blue = Color(0xFF1A73E8);
-  static const _green = Color(0xFF34A853);
-  static const _red = Color(0xFFE53935);
-  static const _amber = Color(0xFFFFA000);
+
+  bool _markingTaken = false;
+
+  Future<void> _markTaken() async {
+    setState(() => _markingTaken = true);
+    try {
+      // Wire to MedicationRepository.instance.markAllTaken in production
+      await Future.delayed(const Duration(milliseconds: 800));
+      ref.invalidate(patientProvider);
+    } finally {
+      if (mounted) setState(() => _markingTaken = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,33 +125,35 @@ class _HomePageState extends ConsumerState<_HomePage> {
         : 0;
     final currentDay = patient?.currentTreatmentDay ?? 0;
     final totalDays = patient?.totalTreatmentDays ?? 180;
-    final progress = patient?.treatmentProgress ?? 0.0;
-    final stockDoses = 45; // pulled from inventory in production
+    final streakDays = patient?.compliance.consecutiveMissedDoses == 0
+        ? patient?.compliance.dosesTaken ?? 0
+        : 0;
+    final takenToday = patient?.compliance.lastDoseTaken != null &&
+        _isToday(patient!.compliance.lastDoseTaken!);
 
-    Color complianceColor = compliance >= 80
-        ? _green
-        : compliance >= 60
-        ? _amber
-        : _red;
+    // Sputum countdown
+    final nextSputum = patient?.sputumTestSchedule
+        .where((s) => s.status == 'Pending' && s.dueDate.isAfter(DateTime.now()))
+        .toList()
+      ?..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    final hasSputum = nextSputum != null && nextSputum.isNotEmpty;
+    final daysUntilSputum = hasSputum
+        ? nextSputum.first.dueDate.difference(DateTime.now()).inDays
+        : 0;
 
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: () async => ref.refresh(patientProvider),
+        onRefresh: () async => ref.invalidate(patientProvider),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── HEADER BANNER ────────────────────────
+              // ── HEADER BANNER ──────────────────────────
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                decoration: const BoxDecoration(
-                  color: _blue,
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(0),
-                  ),
-                ),
+                decoration: const BoxDecoration(color: _blue),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -157,7 +173,7 @@ class _HomePageState extends ConsumerState<_HomePage> {
                           'Day $currentDay of $totalDays Treatment',
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
                       ],
@@ -165,7 +181,7 @@ class _HomePageState extends ConsumerState<_HomePage> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -183,242 +199,84 @@ class _HomePageState extends ConsumerState<_HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── MEDICINE INVENTORY ────────────────
-                    _SectionCard(
-                      title: 'Medicine Inventory',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: _green.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.medication_outlined,
-                                  color: _green,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Anti-TB Medication Stock',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF2D3748),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$stockDoses Doses Available',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Stock Level',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: (stockDoses / 60).clamp(0.0, 1.0),
-                              minHeight: 8,
-                              backgroundColor: Colors.grey.shade200,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                _green,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+
+                    // ── STREAK ────────────────────────────
+                    StreakCard(
+                      streakDays: streakDays,
+                      takenToday: takenToday,
                     ),
                     const SizedBox(height: 12),
 
-                    // ── TODAY'S MEDICATION ────────────────
-                    _SectionCard(
-                      title: "Today's Medication",
-                      trailing: Text(
-                        _formattedToday(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _blue.withOpacity(0.06),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: _blue.withOpacity(0.2)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _blue,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Text(
-                                    'Rx',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Anti-TB Meds (Daily Dose)',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF2D3748),
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'Take with water after meal',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.pushNamed(
-                                context,
-                                RouteNames.medication,
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _green,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: const Text(
-                                'Mark as Taken',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    // ── COMPLIANCE + DAYS LEFT + PROGRESS ─
+                    DaysRemainingCard(
+                      daysRemaining: daysLeft,
+                      totalDays: totalDays,
+                      compliancePercentage: compliance,
                     ),
                     const SizedBox(height: 12),
 
-                    // ── COMPLIANCE + DAYS LEFT ────────────
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatBox(
-                            label: 'Compliance',
-                            value: '${compliance.toStringAsFixed(0)}%',
-                            valueColor: complianceColor,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatBox(
-                            label: 'Days Left',
-                            value: '$daysLeft',
-                            valueColor: _blue,
-                          ),
-                        ),
-                      ],
+                    // ── SPUTUM COUNTDOWN ──────────────────
+                    SputumCountdownCard(
+                      daysUntilTest: hasSputum ? daysUntilSputum : 0,
+                      testMonth: hasSputum ? nextSputum.first.month : 0,
+                      dueDate: hasSputum ? nextSputum.first.dueDate : null,
+                      noTestScheduled: !hasSputum,
                     ),
                     const SizedBox(height: 12),
 
-                    // ── OVERALL PROGRESS ──────────────────
-                    _SectionCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'OVERALL PROGRESS',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF9E9E9E),
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              Text(
-                                '${(progress * 100).toStringAsFixed(0)}%',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: _blue,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 10,
-                              backgroundColor: Colors.grey.shade200,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                _blue,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    // ── TODAY'S CHECKLIST ─────────────────
+                    TodayChecklistCard(
+                      medicationName: 'Anti-TB Meds (Daily Dose)',
+                      instruction: 'Take with water after meal',
+                      isTaken: takenToday,
+                      isLoading: _markingTaken,
+                      date: DateTime.now(),
+                      stockDoses: 45,
+                      onMarkTaken: _markTaken,
                     ),
                     const SizedBox(height: 20),
+
+                    // ── QUICK ACCESS ──────────────────────
+                    const Text(
+                      'QUICK ACCESS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF9E9E9E),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    QuickAccessGrid(
+                      items: [
+                        const QuickAccessItem(
+                          label: 'Medication',
+                          icon: Icons.medication_rounded,
+                          color: Color(0xFF1A73E8),
+                          route: RouteNames.medication,
+                        ),
+                        const QuickAccessItem(
+                          label: 'Symptoms',
+                          icon: Icons.sick_outlined,
+                          color: Color(0xFFE53935),
+                          route: RouteNames.symptomLog,
+                        ),
+                        const QuickAccessItem(
+                          label: 'Sputum',
+                          icon: Icons.biotech_outlined,
+                          color: Color(0xFF9C27B0),
+                          route: RouteNames.sputum,
+                        ),
+                        const QuickAccessItem(
+                          label: 'Appointments',
+                          icon: Icons.calendar_today_outlined,
+                          color: Color(0xFF34A853),
+                          route: RouteNames.appointments,
+                        ),
+                      ],
+                      onTap: (route) => context.push(route),
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -429,125 +287,10 @@ class _HomePageState extends ConsumerState<_HomePage> {
     );
   }
 
-  String _formattedToday() {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
+  bool _isToday(DateTime date) {
     final now = DateTime.now();
-    return '${months[now.month - 1]} ${now.day}, ${now.year}';
-  }
-}
-
-// ── Section card wrapper ───────────────────────────────────
-class _SectionCard extends StatelessWidget {
-  final String? title;
-  final Widget? trailing;
-  final Widget child;
-
-  const _SectionCard({this.title, this.trailing, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title!,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF2D3748),
-                  ),
-                ),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-// ── Stat box ──────────────────────────────────────────────
-class _StatBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-
-  const _StatBox({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: valueColor,
-            ),
-          ),
-        ],
-      ),
-    );
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 }

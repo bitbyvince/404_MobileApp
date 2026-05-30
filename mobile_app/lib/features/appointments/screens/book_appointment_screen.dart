@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../data/repositories/appointment_repository.dart';
 import '../widgets/slot_picker.dart';
 
@@ -116,14 +117,13 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             backgroundColor: _green,
           ),
         );
-        Navigator.pop(context, true);
+        context.pop(true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -266,9 +266,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: _green.withOpacity(0.08),
+                  color: _green.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _green.withOpacity(0.3)),
+                  border: Border.all(color: _green.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

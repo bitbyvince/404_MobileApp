@@ -266,12 +266,13 @@ class ApiInterceptor extends Interceptor {
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        final newJwt = data['token'] as String?;
-        final newRefresh = data['refresh_token'] as String?;
+        // backend returns data.accessToken and data.refreshToken
+        final responseData = data['data'] as Map<String, dynamic>?;
+        final newJwt = responseData?['accessToken'] as String?;
+        final newRefresh = responseData?['refreshToken'] as String?;
 
         if (newJwt == null) return null;
 
-        // Persist new tokens
         await SecureStorageService.saveJwt(newJwt);
         if (newRefresh != null) {
           await SecureStorageService.saveRefreshToken(newRefresh);
@@ -325,7 +326,12 @@ class ApiInterceptor extends Interceptor {
   // ── Helpers ───────────────────────────────────────────────
   // Routes that don't need an Authorization header
   bool _isAuthRoute(String path) {
+    // These routes do NOT get an Authorization header injected
+    // and do NOT trigger a refresh loop on 401.
+    // /auth/verify is removed — it should receive the token.
+    // Only login/refresh/otp routes truly need no token.
     const authPaths = [
+      '/auth/patient-login',
       '/auth/login',
       '/auth/refresh',
       '/otp/request',

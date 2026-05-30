@@ -1,16 +1,5 @@
 // ============================================================
 // lib/services/auth_service.dart
-//
-// Handles all authentication logic for the patient mobile app.
-//
-// Responsibilities:
-//   - Login via tb_case_number / phone_number / email + PIN
-//   - Session check on app launch (splash screen)
-//   - Token refresh
-//   - Logout (clears storage + deregisters FCM token)
-//
-// Does NOT handle navigation — that is the authProvider's job.
-// Does NOT handle OTP — that is otp_service.dart's job.
 // ============================================================
 
 import 'package:dio/dio.dart';
@@ -21,21 +10,18 @@ import 'secure_storage_service.dart';
 import 'dart:async' show unawaited;
 
 // ── Result type ───────────────────────────────────────────────
-// Wraps success/failure so repositories never throw — they return
 sealed class AuthResult {}
 
 class AuthSuccess extends AuthResult {
   AuthSuccess({
     required this.userId,
     required this.patientId,
-    required this.tbCaseNumber,
     required this.token,
     required this.refreshToken,
   });
 
   final String userId;
   final String patientId;
-  final String tbCaseNumber;
   final String token;
   final String refreshToken;
 }
@@ -48,9 +34,8 @@ class AuthFailure extends AuthResult {
 }
 
 // ── Identifier type ────────────────────────────────────────────
-// Matches what your Express backend expects in the login body
 enum IdentifierType {
-  tbCaseNumber('tb_case_number'),
+  patientId('patient_id'),
   phoneNumber('phone_number'),
   email('email');
 
@@ -65,13 +50,7 @@ class AuthService {
 
   // ============================================================
   // LOGIN
-  // POST /auth/login
-  //
-  // Patient logs in using one of three identifiers + 4-digit PIN.
-  // On success:
-  //   1. Saves JWT + refresh token to flutter_secure_storage
-  //   2. Saves user identity (user_id, patient_id, tb_case_number)
-  //   3. Saves the identifier for pre-fill on next login
+  // POST /auth/patient-login
   // ============================================================
   static Future<AuthResult> login({
     required String identifier,
@@ -79,7 +58,6 @@ class AuthService {
     required String pin,
   }) async {
     try {
-      // Basic client-side validation before hitting the network
       final validationError = _validateLoginInput(
         identifier: identifier,
         identifierType: identifierType,
@@ -99,51 +77,46 @@ class AuthService {
         },
       );
 
-      // ── Success path ────────────────────────────────────
       if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
+        final body = response.data as Map<String, dynamic>;
+        final data = body['data'] as Map<String, dynamic>?;
 
-        final token = data['token'] as String?;
-        final refreshToken = data['refresh_token'] as String?;
-        final user = data['user'] as Map<String, dynamic>?;
-
-        if (token == null || user == null) {
+        if (data == null) {
           return AuthFailure(
             code: 'INVALID_RESPONSE',
             message: 'Unexpected response from server. Please try again.',
           );
         }
 
-        final userId = user['user_id'] as String? ?? '';
-        final patientId = user['patient_id'] as String? ?? '';
-        final tbCaseNumber = user['tb_case_number'] as String? ?? '';
+        final token = data['accessToken'] as String?;
+        final refreshToken = data['refreshToken'] as String?;
 
-        // Persist credentials to secure storage
-        await Future.wait([
-          SecureStorageService.saveJwt(token),
-          if (refreshToken != null)
-            SecureStorageService.saveRefreshToken(refreshToken),
-          SecureStorageService.saveUserIdentity(
-            userId: userId,
-            patientId: patientId,
-            tbCaseNumber: tbCaseNumber,
-          ),
-          // Save identifier so login field pre-fills next time
-          SecureStorageService.saveIdentifier(identifier.trim()),
-        ]);
+        if (token == null) {
+          return AuthFailure(
+            code: 'INVALID_RESPONSE',
+            message: 'Unexpected response from server. Please try again.',
+          );
+        }
 
-        debugPrint('[AuthService] Login success — $tbCaseNumber');
+        // ── FIX: await storage writes sequentially before returning ──
+        // This ensures the token is fully persisted before the caller
+        // (AuthProvider) attempts any follow-up requests like /auth/verify
+        await SecureStorageService.saveJwt(token);
+        if (refreshToken != null) {
+          await SecureStorageService.saveRefreshToken(refreshToken);
+        }
+        await SecureStorageService.saveIdentifier(identifier.trim());
+
+        debugPrint('[AuthService] Login success — token saved.');
 
         return AuthSuccess(
-          userId: userId,
-          patientId: patientId,
-          tbCaseNumber: tbCaseNumber,
+          userId: '',
+          patientId: '',
           token: token,
           refreshToken: refreshToken ?? '',
         );
       }
 
-      // ── Known error responses from Express backend ──────
       return _mapErrorResponse(response);
     } on DioException catch (e) {
       return _mapDioException(e);
@@ -157,12 +130,7 @@ class AuthService {
   }
 
   // ============================================================
-  // SESSION CHECK
-  // Called by SplashScreen on every app launch.
-  //
-  // Checks if a valid JWT exists in secure storage.
-  // If found but expired, attempts a silent refresh.
-  // Returns true if a valid session is established.
+  // SESSION CHECK — called by SplashScreen on app launch
   // ============================================================
   static Future<bool> checkExistingSession() async {
     try {
@@ -173,31 +141,24 @@ class AuthService {
         return false;
       }
 
-      // Verify the token is still valid with the backend
-      final response = await _dio.get(ApiConfig.verifyToken);
+      // Use /patients/me — it's the correct authenticated profile endpoint.
+      // /auth/verify doesn't accept a Bearer token in your backend.
+      final response = await _dio.get(ApiConfig.myProfile);
 
       if (response.statusCode == 200) {
         debugPrint('[AuthService] Session valid — proceeding to dashboard.');
         return true;
       }
 
-      // Token invalid or expired — clear and return false
-      // ApiInterceptor will have already attempted a refresh.
-      // If we reach here, refresh also failed.
       await SecureStorageService.wipeAll();
       return false;
     } on DioException catch (e) {
-      // Network error during session check — don't force logout
-      // Let the user try; requests will fail with NO_CONNECTION
       if (e.requestOptions.extra['error_code'] == 'NO_CONNECTION') {
         debugPrint('[AuthService] Offline during session check.');
-        // Return true only if a token exists — allows offline access
-        // to cached data while the app is open
         final token = await SecureStorageService.getJwt();
         return token != null && token.isNotEmpty;
       }
 
-      // Session truly expired
       await SecureStorageService.wipeAll();
       return false;
     } catch (e) {
@@ -209,30 +170,19 @@ class AuthService {
 
   // ============================================================
   // LOGOUT
-  // POST /auth/logout
-  //
-  // 1. Tells backend to invalidate the refresh token
-  // 2. Deregisters the FCM device token from Firestore
-  // 3. Clears all local secure storage
-  //
-  // Always succeeds locally even if the network call fails —
-  // the patient is logged out on the device regardless
   // ============================================================
   static Future<void> logout({String? fcmToken}) async {
     try {
       final token = await SecureStorageService.getJwt();
 
       if (token != null && token.isNotEmpty) {
-        // Tell backend to invalidate the refresh token
-        // Fire and forget — don't block logout on this
         unawaited(
           _dio.post(ApiConfig.logout).then((_) {}).catchError((dynamic e) {
             debugPrint('[AuthService] Logout backend call failed: $e');
-            return null; // must return something assignable to Response
+            return null;
           }),
         );
 
-        // Deregister FCM token from Firestore
         if (fcmToken != null && fcmToken.isNotEmpty) {
           unawaited(
             _dio
@@ -248,7 +198,6 @@ class AuthService {
     } catch (e) {
       debugPrint('[AuthService] Logout error (non-fatal): $e');
     } finally {
-      // Always clear local storage regardless of network result
       await SecureStorageService.wipeAll();
       ApiClient.reset();
       debugPrint('[AuthService] Logged out — storage cleared.');
@@ -256,31 +205,25 @@ class AuthService {
   }
 
   // ============================================================
-  // GET CURRENT IDENTITY
-  // Reads from secure storage — no network call.
-  // Used by providers to reconstruct state after app restart.
+  // GET CURRENT IDENTITY — reads from storage, no network call
   // ============================================================
   static Future<Map<String, String?>> getCurrentIdentity() async {
     final results = await Future.wait([
       SecureStorageService.getUserId(),
       SecureStorageService.getPatientId(),
-      SecureStorageService.getTbCaseNumber(),
       SecureStorageService.getSavedIdentifier(),
     ]);
 
     return {
       'user_id': results[0],
       'patient_id': results[1],
-      'tb_case_number': results[2],
-      'saved_identifier': results[3],
+      'saved_identifier': results[2],
     };
   }
 
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
-
-  // Client-side validation before making the network call
   static String? _validateLoginInput({
     required String identifier,
     required IdentifierType identifierType,
@@ -299,23 +242,18 @@ class AuthService {
     }
 
     switch (identifierType) {
-      case IdentifierType.tbCaseNumber:
-        // Validate PHNT-1304-071-S26-0001 format
-        final tbPattern = RegExp(
-          r'^PHNT-\d{4}-\d{3}-(S|DR)\d{2}-\d{4}$',
-          caseSensitive: false,
-        );
-        if (!tbPattern.hasMatch(identifier.trim())) {
-          return 'Invalid TB case number format. '
-              'Example: PHNT-1304-071-S26-0001';
+      case IdentifierType.patientId:
+        // Format: PT-0001
+        final patientPattern = RegExp(r'^PT-\d{4}$', caseSensitive: false);
+        if (!patientPattern.hasMatch(identifier.trim())) {
+          return 'Invalid Patient ID format. Example: PT-0001';
         }
 
       case IdentifierType.phoneNumber:
-        // Philippine mobile number: +639XXXXXXXXX or 09XXXXXXXXX
+        // Philippine mobile: +639XXXXXXXXX or 09XXXXXXXXX
         final phonePattern = RegExp(r'^(\+63|0)9\d{9}$');
         if (!phonePattern.hasMatch(identifier.trim())) {
-          return 'Invalid phone number. '
-              'Use format: 09XXXXXXXXX or +639XXXXXXXXX';
+          return 'Invalid phone number. Use format: 09XXXXXXXXX or +639XXXXXXXXX';
         }
 
       case IdentifierType.email:
@@ -327,10 +265,9 @@ class AuthService {
         }
     }
 
-    return null; // no errors
+    return null;
   }
 
-  // Maps non-2xx HTTP responses to AuthFailure
   static AuthFailure _mapErrorResponse(Response response) {
     final data = response.data as Map<String, dynamic>?;
     final code = data?['code'] as String? ?? 'ERROR';
@@ -369,7 +306,6 @@ class AuthService {
     }
   }
 
-  // Maps DioException types to AuthFailure
   static AuthFailure _mapDioException(DioException e) {
     final code = e.requestOptions.extra['error_code'] as String?;
     final message = e.requestOptions.extra['error_message'] as String?;

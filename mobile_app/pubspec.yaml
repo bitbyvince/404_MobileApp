@@ -21,10 +21,6 @@ dependencies:
 
   # ── Maps & Geolocation ──────────────────────────────────────
   # OpenStreetMap via flutter_map — 100% free, no API key, no billing
-  flutter_map: ^6.1.0 # Map widget using OpenStreetMap tiles
-  latlong2: ^0.9.0 # LatLng type for flutter_map
-  flutter_map_cancellable_tile_provider: ^2.0.0 # Better tile loading
-  geolocator: ^11.0.0 # GPS coordinates
   permission_handler: ^11.3.0 # Runtime permissions (location, notif)
 
   # ── HTTP & API ───────────────────────────────────────────────
