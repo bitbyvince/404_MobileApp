@@ -13,17 +13,9 @@ class MedicationProvider extends ChangeNotifier {
   // ── STATE ────────────────────────────────────────────────
   MedicationStatus _status = MedicationStatus.initial;
   String? _errorMessage;
-
-  // Today's log — null means not yet logged today
   MedicationLogModel? _todayLog;
-
-  // Calendar view — maps date string (yyyy-MM-dd) to log
   Map<String, MedicationLogModel> _calendarLogs = {};
-
-  // Full history list for the compliance calendar screen
   List<MedicationLogModel> _history = [];
-
-  // Pagination
   bool _hasMoreHistory = true;
   int _historyPage = 1;
   bool _isLoadingMore = false;
@@ -38,11 +30,8 @@ class MedicationProvider extends ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoading => _status == MedicationStatus.loading;
   bool get isSubmitting => _status == MedicationStatus.submitting;
-
-  // ── Derived: Has the patient logged today? ───────────────
   bool get hasLoggedToday => _todayLog != null;
 
-  // ── Derived: Are all drugs marked taken today? ───────────
   bool get allTakenToday {
     if (_todayLog == null) return false;
     return _todayLog!.medicines.every((m) => m.status == 'Taken');
@@ -53,8 +42,9 @@ class MedicationProvider extends ChangeNotifier {
     _setStatus(MedicationStatus.loading);
     _clearError();
     try {
-      final today = DateTime.now();
-      final log = await _medicationRepository.getLogByDate(date: today);
+      final log = await _medicationRepository.getLogByDate(
+        date: DateTime.now(),
+      );
       _todayLog = log;
       _setStatus(MedicationStatus.loaded);
     } catch (e) {
@@ -69,9 +59,7 @@ class MedicationProvider extends ChangeNotifier {
       _historyPage = 1;
       _hasMoreHistory = true;
     }
-
-    if (!_hasMoreHistory) return;
-    if (_isLoadingMore) return;
+    if (!_hasMoreHistory || _isLoadingMore) return;
 
     if (_history.isEmpty) {
       _setStatus(MedicationStatus.loading);
@@ -89,13 +77,9 @@ class MedicationProvider extends ChangeNotifier {
       _history.addAll(result.logs);
       _hasMoreHistory = result.hasMore;
       _historyPage++;
-
-      // Populate calendar map for quick date-keyed lookup
       for (final log in result.logs) {
-        final key = _dateKey(log.logDate);
-        _calendarLogs[key] = log;
+        _calendarLogs[_dateKey(log.logDate)] = log;
       }
-
       _setStatus(MedicationStatus.loaded);
     } catch (e) {
       _setError(e.toString());
@@ -105,8 +89,7 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // ── MARK DRUG AS TAKEN ───────────────────────────────────
-  // Called when patient taps "Mark as Taken" for a single drug
+  // ── MARK SINGLE DRUG TAKEN ───────────────────────────────
   Future<bool> markDrugTaken({
     required String drugName,
     required String strength,
@@ -120,7 +103,6 @@ class MedicationProvider extends ChangeNotifier {
         takenAt: DateTime.now(),
       );
       _todayLog = updatedLog;
-      // Update calendar map
       _calendarLogs[_dateKey(updatedLog.logDate)] = updatedLog;
       _setStatus(MedicationStatus.success);
       return true;
@@ -130,8 +112,7 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // ── MARK ALL DRUGS TAKEN ─────────────────────────────────
-  // Called when patient taps the main "Mark All as Taken" button
+  // ── MARK ALL TAKEN ────────────────────────────────────────
   Future<bool> markAllTaken() async {
     _setStatus(MedicationStatus.submitting);
     _clearError();
@@ -141,17 +122,14 @@ class MedicationProvider extends ChangeNotifier {
       );
       _todayLog = updatedLog;
       _calendarLogs[_dateKey(updatedLog.logDate)] = updatedLog;
-
-      // Update history if already loaded
-      final historyIndex = _history.indexWhere(
+      final idx = _history.indexWhere(
         (l) => _dateKey(l.logDate) == _dateKey(updatedLog.logDate),
       );
-      if (historyIndex != -1) {
-        _history[historyIndex] = updatedLog;
+      if (idx != -1) {
+        _history[idx] = updatedLog;
       } else {
         _history.insert(0, updatedLog);
       }
-
       _setStatus(MedicationStatus.success);
       return true;
     } catch (e) {
@@ -163,12 +141,7 @@ class MedicationProvider extends ChangeNotifier {
   // ── GET LOG BY DATE (calendar tap) ──────────────────────
   Future<MedicationLogModel?> getLogByDate(DateTime date) async {
     final key = _dateKey(date);
-
-    // Return from cache if available
-    if (_calendarLogs.containsKey(key)) {
-      return _calendarLogs[key];
-    }
-
+    if (_calendarLogs.containsKey(key)) return _calendarLogs[key];
     try {
       final log = await _medicationRepository.getLogByDate(date: date);
       if (log != null) {
@@ -181,12 +154,9 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // ── COMPLIANCE STATS ─────────────────────────────────────
-  // Derives compliance color for calendar — used by compliance_calendar.dart
-  // Returns 'taken' | 'partial' | 'missed' | 'none'
+  // ── DAY STATUS FOR CALENDAR ──────────────────────────────
   String getDayStatus(DateTime date) {
-    final key = _dateKey(date);
-    final log = _calendarLogs[key];
+    final log = _calendarLogs[_dateKey(date)];
     if (log == null) return 'none';
     return log.overallStatus.toLowerCase();
   }
@@ -206,10 +176,12 @@ class MedicationProvider extends ChangeNotifier {
 
   // ── PRIVATE HELPERS ──────────────────────────────────────
   String _dateKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      '${date.year}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 
-  void _setStatus(MedicationStatus status) {
-    _status = status;
+  void _setStatus(MedicationStatus s) {
+    _status = s;
     notifyListeners();
   }
 
@@ -219,9 +191,7 @@ class MedicationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _clearError() {
-    _errorMessage = null;
-  }
+  void _clearError() => _errorMessage = null;
 
   void clearError() {
     _clearError();

@@ -138,11 +138,27 @@ class _MedicationScreenState extends ConsumerState<MedicationScreen> {
         if (mounted) setState(() => _todayLog = updated);
       } else {
         // No log yet — POST new log
-        final updated = await MedicationRepository.instance.markDrugTaken(
-          drugName: drug.drugName,
-          strength: drug.strength,
-          takenAt: DateTime.now(),
-          fullRegimen: _patient!.drugRegimen,
+        final medicines = _patient!.drugRegimen
+            .map(
+              (d) => {
+                'drug_name': d.drugName,
+                'strength': d.strength,
+                'unit': d.unit,
+                'number_to_be_taken': d.numberToBeTaken,
+                'status':
+                    (d.drugName == drug.drugName && d.strength == drug.strength)
+                    ? 'Taken'
+                    : 'Missed',
+                'taken_at':
+                    (d.drugName == drug.drugName && d.strength == drug.strength)
+                    ? DateTime.now().toIso8601String()
+                    : null,
+              },
+            )
+            .toList();
+
+        final updated = await MedicationRepository.instance.submitLog(
+          medicines: medicines,
         );
         if (mounted) setState(() => _todayLog = updated);
       }
@@ -184,11 +200,25 @@ class _MedicationScreenState extends ConsumerState<MedicationScreen> {
           medicines: medicines,
         );
         if (mounted) setState(() => _todayLog = updated);
+      // In _markAllTaken — replace the else branch:
       } else {
         // No log yet — POST new log with all Taken
-        final updated = await MedicationRepository.instance.markAllTaken(
-          takenAt: DateTime.now(),
-          fullRegimen: _patient!.drugRegimen,
+        final now = DateTime.now().toIso8601String();
+        final medicines = _patient!.drugRegimen
+            .map(
+              (d) => {
+                'drug_name': d.drugName,
+                'strength': d.strength,
+                'unit': d.unit,
+                'number_to_be_taken': d.numberToBeTaken,
+                'status': 'Taken',
+                'taken_at': now,
+              },
+            )
+            .toList();
+
+        final updated = await MedicationRepository.instance.submitLog(
+          medicines: medicines,
         );
         if (mounted) setState(() => _todayLog = updated);
       }
