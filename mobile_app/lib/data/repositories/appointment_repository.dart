@@ -1,4 +1,3 @@
-import 'package:respiratrack/config/api_config.dart';
 import 'package:respiratrack/data/models/appointment_model.dart';
 import 'package:respiratrack/services/api/api_client.dart';
 
